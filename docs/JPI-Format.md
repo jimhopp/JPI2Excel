@@ -3,8 +3,8 @@
 Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 All rights reserved.
 
-**Revision:** 6
-**Revision date:** 2026-10-09
+**Revision:** 7
+**Revision date:** 2026-10-12
 **Project:** JPI2Excel
 
 ## Revision history
@@ -16,6 +16,7 @@ All rights reserved.
 | 3 | 2026-09-28 | Added initial observations that the three legacy fixtures contain bytes between the end implied by the `$D` directory entries and the `$E` marker; interpretation remained unresolved. |
 | 4 | 2026-09-28 | Identified the `$L` value as a 256-byte binary-block count for all three legacy fixtures; reclassified the bytes after the logical `$D` data as final-block slack rather than additional flight data; added validation and implementation rules. |
 | 6 | 2026-10-09 | Added section 14.1: flight start time uses DOS-style packing with seconds in bits 0-4 doubled, verified against EZTrends; upstream JPI-Parser's `time_word & 62` is wrong. |
+| 7 | 2026-10-12 | Added section 25: protocol-2 EDM-730 header, flight packing, trailer, channel, GPS, and timestamp findings, checked against EZTrends exports. |
 
 ## Status and evidence
 
@@ -749,3 +750,99 @@ The following remain unresolved:
 These uncertainties do not prevent safe decoding of the three current fixtures.
 
 The file itself provides enough information to distinguish the logical flight data from the physical transfer/storage block boundary.
+
+---
+
+## 25. Protocol-2 single-engine files (EDM-730)
+
+### 25.1 Evidence
+
+Seven downloads from one EDM-730 (firmware 1.40, build 2014, beta 4), containing 37 non-empty flights, plus JPI EZTrends CSV exports of two of those flights (one of 1,791 samples, one of 3 samples).
+
+These files identify the aircraft and are not committed. Regression fixtures derived from them must be anonymized (see 25.5).
+
+### 25.2 ASCII header
+
+Record order observed in all seven files:
+
+```text
+$U, $A, $F, $T, $C, $P, $H, $D..., $L
+```
+
+Differences from the legacy family:
+
+- Fields carry leading spaces, e.g. `$D, 735, 77`.
+- `$C` has nine fields: `$C,730,63741,22657,1536,17634,120,140,2014,4`. The first is the model code (730). Upstream reads the last three as software version (140, i.e. 1.40), build (2014), and beta (4); this matches the `$V` trailer. The meaning of the middle words beyond upstream's unit flags is unconfirmed.
+- `$P, 2` declares protocol 2. Upstream treats `$P` as selecting the wide flight header and 16-bit record masks.
+- `$H,0` is present. Its meaning is unknown.
+- `$F,0,50,9999,2168,2990` matches the instrument's settings: fuel units (0 = gallons), main tank (50), aux tank (9999), and K-factors 21.68 and 29.90 (stored ×100).
+- `$A` keeps eight fields.
+
+### 25.3 Flight directory and packing
+
+`$D` gives each flight's length in 16-bit words, rounded **up**:
+
+```text
+$D halfsize = ceil(actual_flight_bytes / 2)
+```
+
+Flights are packed back to back with **no** alignment pad. A flight with an odd byte length therefore ends one byte before its `$D` allocation, and the next flight starts there. Across 37 flights: 19 even-length flights fill their allocation exactly; 18 odd-length flights are one byte short. Starting offsets drift 0–4 bytes earlier than the cumulative `$D` sizes predict.
+
+This differs from the legacy family, where the pad byte sits inside the allocation (section 8). A protocol-2 reader must locate each flight by its actual decoded length, not by cumulative `$D` sizes.
+
+A `$D` entry may have size 0 (one file). EZTrends does not list such a flight. JPI2Excel should skip it and report a warning.
+
+`$L = ceil(2 * sum($D halfsizes) / 256)` holds in all seven files, as in the legacy family.
+
+### 25.4 Trailer
+
+```text
+[last flight's final record]
+$E,4*5D\r\n
+JPI + XOR-0x02-encoded UTF-8 XML configuration (about 10 KB)
+$E,4*5D\r\n
+$V,Created by EDM730 VER 1.40 BLD 2014 BETA 4*68\r\n
+```
+
+The first `$E` immediately follows the last flight's final record. It is **not** at `data_start + $L*256` as in the legacy family.
+
+The configuration block begins with the literal bytes `JPI`; the remaining bytes XOR `0x02` give a UTF-8 byte-order mark and an `<edm_cfg>` XML document. It holds instrument settings **including the tail number**, so it must never be copied into fixtures or exported output. JPI2Excel should treat it as opaque.
+
+### 25.5 Flight header and records
+
+The flight header is 29 bytes: flight ID, five configuration words, a 32-bit signed starting latitude and longitude, fuel-unit byte, horsepower byte, interval word, date word, time word, and a checksum byte. Upstream's `edm_typ_actual` and new-header detection select this layout for all 37 flights.
+
+Records use 16-bit masks and upstream's `HEADERS_107` channel table. All flight headers and all records validate with the additive (`sum % 256`) checksum, which upstream selects for protocol 2.
+
+Anonymized fixtures must replace the tail number, omit the configuration block, and replace the starting latitude/longitude and GPS position deltas.
+
+### 25.6 Comparison with EZTrends
+
+With running totals carried forward across unchanged samples (as the legacy reader already does), every engine and fuel channel equals the EZTrends export at every sample: E1–E4, E6, C1–C6, CLD, carb temperature, FF, FF2, BAT, USD, HRS, and DIF (maximum minus minimum EGT). E5, MAP, and USD2 are blank in both.
+
+Channel naming: upstream's `CDT` is carburetor temperature on this installation; EZTrends labels it `CRB`.
+
+FF2 and USD2 are enabled in the configuration, but the owner confirmed that no second fuel-flow sensor is installed. FF2 reads 0.0 throughout in both JPI2Excel and EZTrends. That value reflects an unconnected channel, not a measured zero flow.
+
+### 25.7 GPS channels
+
+`LAT` and `LNG` are signed integers in units of 1/6000 degree:
+
+```text
+raw = degrees * 6000 + minutes * 100 + hundredths_of_minute
+```
+
+EZTrends displays them as `N36.53.18`-style degrees.minutes.hundredths. JPI2Excel exports decimal degrees (`raw / 6000`).
+
+EZTrends shows `SPD` and `ALT` as `NA` whenever a record carries a zero delta byte for them, even in steady cruise, and shows `LAT`/`LNG` as `NA` only before the first position fix. JPI2Excel instead carries all GPS values forward once a channel has had a value, consistent with the engine channels.
+
+Values recorded while the GPS acquires a fix (a single-sample position jump, ground-roll speed, altitude settling) also appear in EZTrends. They are data, not decoding errors.
+
+### 25.8 Start timestamp
+
+Protocol-2 flight headers use the same DOS-style time word as legacy files (section 14.1). For both EZTrends-checked EDM-730 flights, `(time_word & 31) * 2` matches EZTrends exactly, while upstream's `time_word & 62` is wrong by +16 s and −14 s.
+
+### 25.9 Remaining uncertainty
+
+- meaning of `$H` and of the unlabeled `$C` configuration words;
+- whether other EDM-730 firmware versions, or other protocol-2 models, share this packing and trailer.
