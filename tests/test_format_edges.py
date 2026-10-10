@@ -1,7 +1,7 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 3. Focused regressions for dates, fast recording and checksum modes."""
+"""Revision: 4. Focused regressions for dates, fast recording and checksum modes."""
 from datetime import datetime
 import tempfile
 from pathlib import Path
@@ -29,6 +29,27 @@ class EdgeTests(unittest.TestCase):
         raw[offset+12:offset+14] = b'\x00\x00'
         raw[offset+14] = -sum(raw[offset:offset+14]) % 256
         self.assertEqual(self.parse(raw).flights[0].start, datetime(2026,9,17))
+
+    def with_time(self, time_word):
+        raw = bytearray(synthetic_file())
+        offset = data_start(raw)
+        raw[offset+12:offset+14] = time_word.to_bytes(2, 'big')
+        raw[offset+14] = -sum(raw[offset:offset+14]) % 256
+        return raw
+
+    def test_seconds_are_low_five_bits_doubled(self):
+        # DOS-style packing, matching EZTrends: flight 418 of U260919.JPI.
+        flight = self.parse(self.with_time(0x88C6)).flights[0]
+        self.assertEqual(flight.start, datetime(2026,9,17,17,6,12))
+
+    def test_seconds_do_not_include_minute_bit(self):
+        # Odd minute with the largest valid seconds field (29 -> 58 s).
+        flight = self.parse(self.with_time((17 << 11) | (7 << 5) | 29)).flights[0]
+        self.assertEqual(flight.start, datetime(2026,9,17,17,7,58))
+
+    def test_seconds_field_above_29_rejected(self):
+        with self.assertRaises(DataError):
+            self.parse(self.with_time((17 << 11) | (7 << 5) | 30))
 
     def test_invalid_date_does_not_use_download_time(self):
         raw = bytearray(synthetic_file())

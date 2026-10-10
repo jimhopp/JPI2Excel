@@ -29,7 +29,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Revision: 3. Strict legacy validation around the pinned MIT JPI-Parser.
+"""Revision: 4. Strict legacy validation around the pinned MIT JPI-Parser.
 
 Binary delta unpacking and metric definitions remain upstream. This adapter
 checks boundaries/checksums, makes running totals dense, and normalizes metadata.
@@ -62,15 +62,18 @@ class CheckedReader(_ByteReader):
 class LegacyDecoder(FlightDecoder):
     @staticmethod
     def _decode_date_time(date_word, time_word):
-        # Upstream treats time word zero as absent, but it represents midnight.
-        if time_word == 0 and date_word > 0:
-            year = (date_word >> 9) & 127
-            try:
-                return datetime((2000 if year < 75 else 1900) + year,
-                                (date_word >> 5) & 15, date_word & 31)
-            except ValueError:
-                return None
-        return FlightDecoder._decode_date_time(date_word, time_word)
+        # DOS-style packing: seconds are bits 0-4 doubled, matching EZTrends.
+        # Upstream reads time_word & 62 (bits 1-5, including the minute's low
+        # bit) and treats time word zero as absent, but it represents midnight.
+        if date_word <= 0:
+            return None
+        year = (date_word >> 9) & 127
+        try:
+            return datetime((2000 if year < 75 else 1900) + year,
+                            (date_word >> 5) & 15, date_word & 31, time_word >> 11,
+                            (time_word >> 5) & 63, (time_word & 31) * 2)
+        except ValueError:
+            return None
 
     def unpack(self):
         reader = CheckedReader(self.flight.data)
@@ -85,7 +88,7 @@ class LegacyDecoder(FlightDecoder):
         # Reject invalid date/time fields instead of upstream's fallback/rollover.
         date_word, time_word = int.from_bytes(block[10:12], 'big'), int.from_bytes(block[12:14], 'big')
         if (not date_word or ((time_word >> 11) & 31) > 23
-                or ((time_word >> 5) & 63) > 59 or (time_word & 62) > 59):
+                or ((time_word >> 5) & 63) > 59 or (time_word & 31) > 29):
             raise DataError('Invalid packed flight date/time')
         self.headers = headers_for_model(self.jpi.model, block[6], False, False)
         self.active_headers = [h for h in self.headers if h.code == 'DIF' or self._cfg_enabled(h)]

@@ -1,7 +1,7 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 3. Regression contracts established before decoder changes."""
+"""Revision: 4. Regression contracts established before decoder changes."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -120,6 +120,8 @@ class ParserTests(unittest.TestCase):
                 self.assertEqual(result.flights[0].tit_count, 1)
                 self.assertNotIn('LAT', result.flights[0].series)
                 if name == 'U260919.JPI':
-                    self.assertEqual(str(result.flights[0].start), '2026-09-17 18:01:58')
+                    self.assertEqual(str(result.flights[0].start), '2026-09-17 18:01:54')
+                    # Matches JPI EZTrends' CSV export of flight 418.
+                    self.assertEqual(str(result.flights[3].start), '2026-09-19 17:06:12')
                     self.assertEqual(result.flights[0].elapsed[-1], 1446)
                     self.assertEqual(result.flights[0].series['E1'][:3], [898,905,912])

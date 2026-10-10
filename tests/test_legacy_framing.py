@@ -1,7 +1,7 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 2. Logical flight allocations versus physical 256-byte blocks."""
+"""Revision: 3. Logical flight allocations versus physical 256-byte blocks."""
 import hashlib
 import json
 from pathlib import Path
@@ -23,13 +23,14 @@ class LegacyFramingTests(unittest.TestCase):
     def test_original_fixture_boundaries_and_values(self):
         # Digests captured from all declared-flight IDs, starts, elapsed seconds,
         # and sensor series BEFORE changing framing. Source filenames excluded.
+        # Recaptured after correcting start seconds; only starts changed.
         expected = {
             'U260731.JPI': (194, 78904, 309, 79298, 200,
-                '077dc29f0473e959ad997c1f8af530516f53642c30c45e0192f571464b4f71ea'),
+                'd2a341c0f1d224667bebf5fb5f3d87bb463c71679a6de0e6d9f0bc229b3a1f59'),
             'U260828.JPI': (308, 129340, 506, 129844, 196,
-                '2dfecaceaa6671ec0169c853971c92d56fe7eab7e5a6471706bce7f2adc21a89'),
+                '275ed210f50143bf40add25c9c5bc2fab0880806794336b7a6efb13b881bd475'),
             'U260919.JPI': (232, 94240, 369, 94696, 224,
-                '143779256faaa4b29df9c41422529e02f92c7f815fcc9f0dcacfefd7cc93522a'),
+                '56cd4dad306daf1c0ea2d4183c78f537f48bec8e6ac101634b059d621513001a'),
         }
         for name, (start, logical, blocks, end, slack, digest) in expected.items():
             with self.subTest(name=name):

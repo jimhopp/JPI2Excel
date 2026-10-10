@@ -3,8 +3,8 @@
 Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 All rights reserved.
 
-**Revision:** 5
-**Revision date:** 2026-10-02
+**Revision:** 6
+**Revision date:** 2026-10-09
 **Project:** JPI2Excel
 
 ## Revision history
@@ -15,6 +15,7 @@ All rights reserved.
 | 2 | 2026-09-27 | Added legacy EDM-800 `$A` alarm mapping, GPS/altitude findings, twin-engine representation, and current upstream-parser limitations. |
 | 3 | 2026-09-28 | Added initial observations that the three legacy fixtures contain bytes between the end implied by the `$D` directory entries and the `$E` marker; interpretation remained unresolved. |
 | 4 | 2026-09-28 | Identified the `$L` value as a 256-byte binary-block count for all three legacy fixtures; reclassified the bytes after the logical `$D` data as final-block slack rather than additional flight data; added validation and implementation rules. |
+| 6 | 2026-10-09 | Added section 14.1: flight start time uses DOS-style packing with seconds in bits 0-4 doubled, verified against EZTrends; upstream JPI-Parser's `time_word & 62` is wrong. |
 
 ## Status and evidence
 
@@ -489,6 +490,25 @@ Unchanged values are reconstructed by retaining accumulated state.
 Because decoding is stateful, isolated record-shaped bytes in the block slack cannot safely be assigned absolute sensor values or timestamps without the correct preceding state.
 
 This is another reason not to recover or append slack records.
+
+### 14.1 Flight start date and time
+
+Each flight header carries a packed date word and time word (bytes 10-13 of a legacy flight header), using DOS-style packing:
+
+```text
+day    =  date_word        & 0x1F
+month  = (date_word >> 5)  & 0x0F
+year   = (date_word >> 9)  & 0x7F    (2000 + year when below 75, else 1900 + year)
+hour   =  time_word >> 11
+minute = (time_word >> 5)  & 0x3F
+second = (time_word & 0x1F) * 2
+```
+
+Verified against an EZTrends CSV export of flight 418 in `U260919.JPI`: time word `0x88C6` gives 17:06:12, and every sample time matches.
+
+Upstream JPI-Parser at the pinned commit computes `second = time_word & 62`, which reads bits 1-5: it includes the minute's low bit and drops the seconds field's low bit. Its start times are therefore off by between -30 and +32 seconds. JPI2Excel decodes the time itself and rejects a seconds field above 29 rather than rolling over. A fix was proposed upstream as unicornlines/JPI-Parser#3.
+
+A time word of zero is midnight, not a missing time.
 
 ---
 
