@@ -1,6 +1,6 @@
 .\" Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 .\" All rights reserved.
-.\" Revision: 3
+.\" Revision: 4
 .TH JPI 5 "September 29, 2026" "JPI2Excel 2.0.0" "File Formats"
 .SH NAME
 jpi \- JP Instruments engine-monitor download format
@@ -20,6 +20,8 @@ an externally reported instrument model.
 Later JPI formats differ and may include protocol records, GPS channels,
 configuration XML, and version trailers.
 Do not apply the legacy framing below unconditionally to other layouts.
+JPI2Excel also supports the EDM-730 protocol-2 layout described under
+.BR "PROTOCOL-2 EDM-730 LAYOUT" .
 .SH LEGACY FILE LAYOUT
 .nf
 ASCII dollar-record header, ending with $L and CRLF
@@ -269,7 +271,38 @@ Later layouts can contain latitude, longitude, altitude, and speed, often
 identified as LAT, LNG, ALT, and SPD.
 They must not be synthesized when absent.
 Twin-capable formats use engine-specific channels on a shared flight timeline.
-These later and multi-engine layouts are outside current decoding support.
+Apart from the EDM-730, later and multi-engine layouts are outside current
+decoding support.
+.SH PROTOCOL-2 EDM-730 LAYOUT
+.nf
+$U, $A, $F, $T, $C (nine fields), $P,2, $H, $D..., $L, CRLF
+flights packed back to back by actual byte length
+$E,4*5D CRLF
+JPI followed by XOR-0x02-encoded configuration XML
+$E,4*5D CRLF
+$V,Created by EDM730 ... CRLF
+end of file
+.fi
+.PP
+Each
+.B $D
+size is the flight's byte length divided by two, rounded up; a flight of odd
+length ends one byte before its allocation and the next flight starts there.
+.B $L
+still counts 256-byte blocks of the
+.B $D
+allocations, but the first
+.B $E
+follows the last flight directly.
+A
+.B $D
+size of zero lists no flight.
+.PP
+Flight headers are 29 bytes and carry a starting latitude and longitude.
+Records use 16-bit masks and additive checksums.
+Positions are in units of 1/6000 degree and are exported as decimal degrees.
+The configuration XML contains the tail number; JPI2Excel treats it as opaque
+and does not export it.
 .SH VALIDATION
 JPI2Excel rejects malformed required metadata, inconsistent block counts,
 a missing or misplaced end marker, invalid flight boundaries, and bad
@@ -283,7 +316,7 @@ has not been established.
 .SH FILES
 .TP
 .B testdata/*.JPI
-Original regression fixtures.
+Original regression fixtures and the anonymized EDM-730 fixture.
 .TP
 .B docs/JPI-Format.md
 Detailed project format notes.

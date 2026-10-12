@@ -1,7 +1,7 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 9. Shared CSV/XLSX layout, metadata, units and alarm reporting."""
+"""Revision: 10. Shared CSV/XLSX layout, metadata, units and alarm reporting."""
 from copy import copy
 import csv
 from datetime import datetime, timedelta
@@ -42,8 +42,8 @@ def ordered_codes(flight):
         return sorted((code for code in present if re.fullmatch(prefix + r'\d+', code)),
                       key=lambda code: int(code[1:]))
     order = ['MAP', 'RPM', *group('E'), *group('T'), *group('C'),
-             'FF', 'HP', 'OAT', 'CDT', 'IAT', 'OILP', 'OILT', 'BAT',
-             'USD', 'MARK', 'DIF', 'CLD']
+             'FF', 'FF2', 'HP', 'OAT', 'CDT', 'IAT', 'OILP', 'OILT', 'BAT',
+             'USD', 'USD2', 'MARK', 'DIF', 'CLD']
     ordered = [code for code in order if code in present]
     ordered += sorted(present - set(ordered) - set(NAVIGATION))
     return ordered + ['Limits'] + [code for code in NAVIGATION if code in present]
@@ -62,6 +62,8 @@ def units(code, download):
         return engine
     return {'OAT': download.metadata['OAT temperature units'], 'CLD': f'{engine}/min',
             'FF': download.metadata['Fuel flow units'], 'USD': download.metadata['Fuel units'],
+            'FF2': download.metadata['Fuel flow units'], 'USD2': download.metadata['Fuel units'],
+            'HRS': 'hours',
             'MAP': 'inHg', 'RPM': 'rpm', 'BAT': 'V', 'OILP': 'psi', 'HP': '%',
             'LAT': 'degrees', 'LNG': 'degrees', 'ALT': 'ft', 'SPD': 'knots'}.get(code, '')
 

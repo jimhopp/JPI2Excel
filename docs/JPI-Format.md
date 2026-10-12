@@ -3,7 +3,7 @@
 Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 All rights reserved.
 
-**Revision:** 7
+**Revision:** 8
 **Revision date:** 2026-10-12
 **Project:** JPI2Excel
 
@@ -17,6 +17,7 @@ All rights reserved.
 | 4 | 2026-09-28 | Identified the `$L` value as a 256-byte binary-block count for all three legacy fixtures; reclassified the bytes after the logical `$D` data as final-block slack rather than additional flight data; added validation and implementation rules. |
 | 6 | 2026-10-09 | Added section 14.1: flight start time uses DOS-style packing with seconds in bits 0-4 doubled, verified against EZTrends; upstream JPI-Parser's `time_word & 62` is wrong. |
 | 7 | 2026-10-12 | Added section 25: protocol-2 EDM-730 header, flight packing, trailer, channel, GPS, and timestamp findings, checked against EZTrends exports. |
+| 8 | 2026-10-12 | Added section 25.10: JPI2Excel protocol-2 decoding rules, the DIF rule for unused EGT inputs, and the anonymized fixture. |
 
 ## Status and evidence
 
@@ -790,7 +791,7 @@ Flights are packed back to back with **no** alignment pad. A flight with an odd 
 
 This differs from the legacy family, where the pad byte sits inside the allocation (section 8). A protocol-2 reader must locate each flight by its actual decoded length, not by cumulative `$D` sizes.
 
-A `$D` entry may have size 0 (one file). EZTrends does not list such a flight. JPI2Excel should skip it and report a warning.
+A `$D` entry may have size 0 (one file). EZTrends does not list such a flight. JPI2Excel skips it and reports a warning.
 
 `$L = ceil(2 * sum($D halfsizes) / 256)` holds in all seven files, as in the legacy family.
 
@@ -846,3 +847,20 @@ Protocol-2 flight headers use the same DOS-style time word as legacy files (sect
 
 - meaning of `$H` and of the unlabeled `$C` configuration words;
 - whether other EDM-730 firmware versions, or other protocol-2 models, share this packing and trailer.
+
+### 25.10 JPI2Excel implementation
+
+JPI2Excel accepts protocol-2 files only for model code 730 with `$P,2`, a nine-field `$C`, an eight-field `$A` (same alarm mapping as legacy), and fuel unit code 0. It:
+
+1. requires `$L = ceil(2 * sum($D halfsizes) / 256)`;
+2. decodes each flight from its true start, stops when at most one byte of the allocation remains, and requires `ceil(decoded_length / 2) * 2` to equal the allocation;
+3. requires upstream to select the 29-byte header and validates the header and every record with the additive checksum;
+4. requires `$E,4` directly after the last flight, a configuration block beginning with `JPI`, a second `$E,4`, and a final `$V` record ending the file;
+5. initializes `LAT`/`LNG` running totals from the header's starting position and exports them as `raw / 6000` degrees once a nonzero delta has occurred;
+6. exports every enabled channel as recorded, including FF2 and USD2.
+
+DIF is the spread of the EGT channels that carry a value somewhere in the flight. The EDM-730 enables E5 but never records it; EZTrends computes DIF from the other EGTs, and so does JPI2Excel. This rule applies to legacy files too; it does not change any legacy fixture output.
+
+The Revision 6 start-time rule (section 14.1) applies unchanged.
+
+`testdata/EDM730-anon.JPI` was built with `pgms/make_edm730_fixture.py` from flights 735, 745, 747 (zero-length) and 749. It replaces the tail number with `TEST730`, replaces the configuration block with a stub, moves each starting position to N45 W100, and sets every nonzero LAT/LNG delta byte to 1, recomputing record checksums. Engine, fuel, SPD and ALT bytes are unchanged, and the regression tests check them against EZTrends values. When the private source downloads are present in `testdata-730/`, the tests also compare every sample of flights 735 and 749, including position, with the EZTrends exports.

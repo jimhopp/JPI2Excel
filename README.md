@@ -3,11 +3,13 @@
 Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 All rights reserved.
 
-Revision: 11
+Revision: 12
 
-A Python CLI for validating legacy JP Instruments EDM-700/800 downloads and
-exporting flight data to CSV or Excel (`.xlsx`). Version 2 adds optional flight graphs. Application code lives in `src`,
+A Python CLI for validating JP Instruments EDM-700/800 (legacy) and EDM-730
+(protocol 2) downloads and exporting flight data to CSV or Excel (`.xlsx`). Version 2 adds optional flight graphs. Application code lives in `src`,
 utilities in `pgms`, tests in `tests`, and the original fixtures in `testdata`.
+`testdata/EDM730-anon.JPI` is an anonymized EDM-730 fixture built by
+`pgms/make_edm730_fixture.py`.
 
 ## Run from this checkout
 
@@ -83,8 +85,11 @@ follow `data/t2.xlsx`.
 Headings use Delta T, % HP, and Mark. Flight widths are Sample 50 pixels,
 Delta T 44, DateTime 115, Limits 125, CHT and supporting sensors 53, and MAP/RPM,
 EGT/TIT/navigation 55. See [conditional formatting](docs/ConditionalFormatting.md).
-Navigation columns, when available, appear last. Initial binary decoding is limited to legacy single-engine
-700/800 layouts with fuel code 0 (US gallons); other layouts fail explicitly.
+Navigation columns, when available, appear last; latitude and longitude are decimal
+degrees. Binary decoding is limited to legacy single-engine 700/800 layouts and
+protocol-2 EDM-730 layouts with fuel code 0 (US gallons); other layouts fail explicitly.
+Channels are exported as recorded, including enabled but unconnected inputs such as
+an EDM-730's FF2. Zero-length `$D` entries are skipped with a warning.
 The exporter/data model are prepared for additional sensors and engine identity.
 
 ## Current fixture finding

@@ -1,7 +1,7 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-# Revision: 3
+# Revision: 4
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jpi2excel"
 version = "2.0.0"
-description = "Validate and export JP Instruments legacy EDM downloads to CSV and XLSX"
+description = "Validate and export JP Instruments EDM-700/800/730 downloads to CSV and XLSX"
 requires-python = ">=3.10"
 dependencies = [
   "jpi-analyzer @ git+https://github.com/unicornlines/JPI-Parser.git@e1a34c37d3cc2194699faba92e6666300cb85e86",

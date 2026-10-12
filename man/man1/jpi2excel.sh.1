@@ -1,6 +1,6 @@
 .\" Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 .\" All rights reserved.
-.\" Revision: 9
+.\" Revision: 10
 .TH JPI2EXCEL.SH 1 "September 30, 2026" "JPI2Excel 2.0.0" "User Commands"
 .SH NAME
 jpi2excel.sh \- validate JP Instruments downloads and export CSV or Excel
@@ -41,9 +41,11 @@ exported; processing continues for other inputs.
 Duplicate flight numbers across files are retained, with a nonfatal warning
 and distinct output names.
 .PP
-Current decoding supports legacy single-engine EDM-700/800 layouts with
-fuel-unit code 0 (U.S. gallons), an eight-field alarm record, and no protocol
-record.
+Current decoding supports single-engine layouts with fuel-unit code 0
+(U.S. gallons) and an eight-field alarm record: legacy EDM-700/800 files with
+no protocol record, and EDM-730 files with protocol record
+.BR "$P,2" .
+A zero-length flight-directory entry is skipped with a warning.
 Other models, multi-engine layouts, and unvalidated formats fail explicitly.
 The recorded model code is preserved, including code 700 in EDM-800 downloads.
 .SH ACTIONS

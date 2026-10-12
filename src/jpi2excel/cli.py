@@ -1,7 +1,7 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 7. Command-line orchestration and errno-based exit status."""
+"""Revision: 8. Command-line orchestration and errno-based exit status."""
 import argparse
 from collections import Counter
 import errno
@@ -23,7 +23,8 @@ class Parser(argparse.ArgumentParser):
 
 def parser():
     p = Parser(prog='jpi2excel', add_help=False,
-               description='Validate legacy single-engine EDM-700/800 JPI files and export CSV or XLSX. '
+               description='Validate single-engine EDM-700/800 (legacy) and EDM-730 (protocol 2) JPI files '
+                           'and export CSV or XLSX. '
                            'Use --info alone or with one other action.')
     p.add_argument('--info', action='store_true',
                    help='Print file and selected-flight properties, alone or with one other action')
