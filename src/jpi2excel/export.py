@@ -1,7 +1,7 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 10. Shared CSV/XLSX layout, metadata, units and alarm reporting."""
+"""Revision: 11. Shared CSV/XLSX layout, metadata, units and alarm reporting."""
 from copy import copy
 import csv
 from datetime import datetime, timedelta
@@ -20,7 +20,7 @@ LABELS = {'OILP': 'Oil P', 'OILT': 'Oil T', 'BAT': 'Batt', 'USD': 'Used',
 # Encode the reference values so exporting does not depend on that sample file.
 WINDOW_GEOMETRY = {'xWindow': 4280, 'yWindow': 2700,
                    'windowWidth': 36860, 'windowHeight': 18380}
-NARROW_SENSORS = {'FF', 'HP', 'OAT', 'CDT', 'IAT', 'OILP', 'OILT', 'BAT',
+NARROW_SENSORS = {'FF', 'HP', 'OAT', 'CDT', 'CRB', 'IAT', 'OILP', 'OILT', 'BAT',
                   'USD', 'MARK', 'DIF', 'CLD'}
 
 # XLSX stores widths in character units, not pixels. Calibrate to the supplied
@@ -42,7 +42,7 @@ def ordered_codes(flight):
         return sorted((code for code in present if re.fullmatch(prefix + r'\d+', code)),
                       key=lambda code: int(code[1:]))
     order = ['MAP', 'RPM', *group('E'), *group('T'), *group('C'),
-             'FF', 'FF2', 'HP', 'OAT', 'CDT', 'IAT', 'OILP', 'OILT', 'BAT',
+             'FF', 'FF2', 'HP', 'OAT', 'CDT', 'CRB', 'IAT', 'OILP', 'OILT', 'BAT',
              'USD', 'USD2', 'MARK', 'DIF', 'CLD']
     ordered = [code for code in order if code in present]
     ordered += sorted(present - set(ordered) - set(NAVIGATION))
@@ -58,7 +58,7 @@ def label(code, flight):
 
 def units(code, download):
     engine = download.metadata['Engine temperature units']
-    if re.fullmatch(r'[ECT]\d+', code) or code in ('IAT', 'CDT', 'OILT', 'DIF'):
+    if re.fullmatch(r'[ECT]\d+', code) or code in ('IAT', 'CDT', 'CRB', 'OILT', 'DIF'):
         return engine
     return {'OAT': download.metadata['OAT temperature units'], 'CLD': f'{engine}/min',
             'FF': download.metadata['Fuel flow units'], 'USD': download.metadata['Fuel units'],
@@ -135,6 +135,7 @@ def info_items(download, minimum_minutes, *, flight_ids=None):
                       'cylinder count': flight.cylinder_count, 'TIT channel count': flight.tit_count,
                       'IAT present': 'Yes' if 'IAT' in flight.series else 'No',
                       'CDT present': 'Yes' if 'CDT' in flight.series else 'No',
+                      'CRB present': 'Yes' if 'CRB' in flight.series else 'No',
                       'navigation': 'GPS' if flight.gps else 'No GPS',
                       'fuel unit code': flight.fuel_unit,
                       'configuration words': ', '.join(map(str, flight.configuration)),

@@ -2,11 +2,12 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 1. Build an anonymized protocol-2 (EDM-730) regression fixture.
+"""Revision: 2. Build an anonymized protocol-2 (EDM-730) regression fixture.
 
 Copies selected flights from private EDM-730 downloads into one new file and
 removes aircraft-identifying content: the tail number becomes TEST730, the XML
-configuration block (which holds the tail number) becomes a stub, each flight's
+configuration block (which holds the tail number) becomes a stub keeping only
+the first source's carbureted attribute, each flight's
 starting latitude/longitude moves to N45 W100, and every nonzero LAT/LNG delta
 byte becomes 1 (signs kept). Engine, fuel, SPD and ALT bytes are unchanged.
 Record checksums are recomputed after the GPS bytes change.
@@ -116,6 +117,10 @@ def main():
     if first[first.index(b'$C,'):].split(b',')[1].strip() != b'730' or keep['P'] != ['2']:
         raise SystemExit('first source is not an EDM-730 protocol-2 download')
     trailer = first[first.rindex(b'$V,'):]
+    start = first.index(b'$E,4*5D\r\nJPI') + 12
+    xml = bytes(b ^ 2 for b in first[start:first.rindex(b'$E,4*5D\r\n$V,')]).decode('utf-8-sig')
+    carbureted = re.search(r'<EDM\b[^>]*\bcarbureted="([^"]*)"', xml)
+    attribute = f' carbureted="{carbureted[1]}"' if carbureted else ''
     entries, blocks = [], []
     for source in args.sources:
         path, flight = source.rsplit(':', 1)
@@ -132,7 +137,8 @@ def main():
              'T, ' + ', '.join(keep['T']), 'C,' + ','.join(keep['C']),
              'P, ' + keep['P'][0], 'H,' + keep['H'][0], *entries,
              f'L, {(2 * halfsizes + 255) // 256}']
-    config = b'JPI' + bytes(b ^ 2 for b in '﻿<edm_cfg/>'.encode('utf-8'))
+    stub = f'\ufeff<edm_cfg><EDM{attribute}/></edm_cfg>'
+    config = b'JPI' + bytes(b ^ 2 for b in stub.encode('utf-8'))
     out = (b''.join(dollar(line) for line in lines) + b''.join(blocks)
            + dollar('E,4') + config + dollar('E,4') + trailer)
     args.output.write_bytes(out)

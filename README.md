@@ -3,7 +3,7 @@
 Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 All rights reserved.
 
-Revision: 12
+Revision: 13
 
 A Python CLI for validating JP Instruments EDM-700/800 (legacy) and EDM-730
 (protocol 2) downloads and exporting flight data to CSV or Excel (`.xlsx`). Version 2 adds optional flight graphs. Application code lives in `src`,
@@ -89,7 +89,9 @@ Navigation columns, when available, appear last; latitude and longitude are deci
 degrees. Binary decoding is limited to legacy single-engine 700/800 layouts and
 protocol-2 EDM-730 layouts with fuel code 0 (US gallons); other layouts fail explicitly.
 Channels are exported as recorded, including enabled but unconnected inputs such as
-an EDM-730's FF2. Zero-length `$D` entries are skipped with a warning.
+an EDM-730's FF2. Zero-length `$D` entries are skipped with a warning. When an
+EDM-730's configuration says `carbureted="1"`, the channel JPI-Parser calls CDT is
+exported as CRB (carburetor temperature), as in EZTrends.
 The exporter/data model are prepared for additional sensors and engine identity.
 
 ## Current fixture finding

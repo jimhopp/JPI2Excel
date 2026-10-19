@@ -1,7 +1,7 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 1. Protocol-2 (EDM-730) framing, decoding, and EZTrends agreement.
+"""Revision: 2. Protocol-2 (EDM-730) framing, decoding, and EZTrends agreement.
 
 EDM730-anon.JPI was built by pgms/make_edm730_fixture.py from flights 735,
 745, 747 (zero-length $D entry) and 749 of private EDM-730 downloads. Expected
@@ -22,7 +22,7 @@ from test_parser import FIXTURES, ROOT, dollar
 FIXTURE = FIXTURES / 'EDM730-anon.JPI'
 PRIVATE = ROOT / 'testdata-730'
 EZ_COLUMNS = ('E1', 'E2', 'E3', 'E4', 'E6', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6',
-              'DIF', 'CLD', 'CDT', 'FF', 'FF2', 'BAT', 'USD', 'HRS')
+              'DIF', 'CLD', 'CRB', 'FF', 'FF2', 'BAT', 'USD', 'HRS')
 # EZTrends rows: index -> values for EZ_COLUMNS.
 EZ_735 = {
     0: (594, 619, 650, 635, 583, 291, 286, 289, 284, 265, 250, 67, 12, 81, 0.0, 0.0, 12.4, 35.6, 924.0),
@@ -48,6 +48,13 @@ def flight_start(raw):
     return raw.index(b'\r\n', raw.index(b'$L,')) + 2
 
 
+def with_configuration(raw, xml):
+    # Replace the XOR-0x02 configuration block between the two $E markers.
+    start = raw.index(b'$E,4*5D\r\nJPI') + 12
+    end = raw.rindex(b'$E,4*5D\r\n$V,')
+    return raw[:start] + bytes(b ^ 2 for b in ('\ufeff' + xml).encode('utf-8')) + raw[end:]
+
+
 class Edm730FixtureTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -70,6 +77,7 @@ class Edm730FixtureTests(unittest.TestCase):
         self.assertEqual(meta['Firmware beta'], 4)
         self.assertEqual(meta['Instrument version ($V)'], 'Created by EDM730 VER 1.40 BLD 2014 BETA 4')
         self.assertEqual(meta['$H'], '0')
+        self.assertEqual(meta['Carbureted (configuration)'], 'Yes')
         self.assertEqual(meta['Total flights'], 3)
         self.assertEqual(meta['Engine temperature units'], 'F')
         self.assertEqual(self.download.alarms['BAT'], (12.0, 16.0))
@@ -98,6 +106,16 @@ class Edm730FixtureTests(unittest.TestCase):
     def test_engine_values_match_eztrends(self):
         self.assert_ez_rows(self.flights[735], EZ_735)
         self.assert_ez_rows(self.flights[749], EZ_749)
+
+    def test_carburetor_temperature_named_crb(self):
+        # The configuration block says carbureted="1"; upstream's CDT channel
+        # is carburetor temperature, labeled CRB as in EZTrends.
+        for flight in self.download.flights:
+            self.assertIn('CRB', flight.series)
+            self.assertNotIn('CDT', flight.series)
+        codes = ordered_codes(self.flights[749])
+        self.assertEqual(codes[codes.index('CRB') - 1], 'FF2')
+        self.assertEqual(units('CRB', self.download), 'F')
 
     def test_unconnected_channels_exported_as_recorded(self):
         # No second fuel-flow sensor is installed; FF2 reads 0.0 and is kept.
@@ -180,6 +198,18 @@ class Edm730FramingTests(unittest.TestCase):
             with self.subTest(name), self.assertRaises((DataError, UnsupportedError)):
                 parse(raw)
 
+    def test_carbureted_flag_selects_channel_name(self):
+        for xml, code, meta, warned in (
+                ('<edm_cfg><EDM carbureted="0"/></edm_cfg>', 'CDT', 'No', False),
+                ('<edm_cfg><EDM/></edm_cfg>', 'CDT', 'Not stated', True),
+                ('<edm_cfg><EDM carbureted="yes"/></edm_cfg>', 'CDT', 'Not stated', True)):
+            with self.subTest(xml=xml):
+                download = parse(with_configuration(self.raw, xml))
+                self.assertIn(code, download.flights[0].series)
+                self.assertNotIn('CRB', download.flights[0].series)
+                self.assertEqual(download.metadata['Carbureted (configuration)'], meta)
+                self.assertEqual(any('carbureted' in w for w in download.warnings), warned)
+
     def test_other_protocol_two_models_unsupported(self):
         raw = self.raw.replace(dollar('C,730,63741,22657,1536,17634,120,140,2014,4'),
                                dollar('C,830,63741,22657,1536,17634,120,140,2014,4'))
@@ -220,7 +250,7 @@ class Edm730PrivateDataTests(unittest.TestCase):
                 self.assertEqual(flight.timestamps[i], stamp)
                 for column, text in zip(columns, row):
                     text = text.strip()
-                    code = {'CRB': 'CDT'}.get(column, column)
+                    code = column
                     if column in ('INDEX', 'DATE', 'TIME', 'MARK', '') or text in ('', 'NA'):
                         continue
                     if code in ('LAT', 'LNG'):

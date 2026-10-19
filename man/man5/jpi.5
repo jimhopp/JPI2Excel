@@ -1,6 +1,6 @@
 .\" Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 .\" All rights reserved.
-.\" Revision: 4
+.\" Revision: 5
 .TH JPI 5 "September 29, 2026" "JPI2Excel 2.0.0" "File Formats"
 .SH NAME
 jpi \- JP Instruments engine-monitor download format
@@ -301,8 +301,13 @@ size of zero lists no flight.
 Flight headers are 29 bytes and carry a starting latitude and longitude.
 Records use 16-bit masks and additive checksums.
 Positions are in units of 1/6000 degree and are exported as decimal degrees.
-The configuration XML contains the tail number; JPI2Excel treats it as opaque
-and does not export it.
+The configuration XML contains the tail number; JPI2Excel does not export it.
+It reads only the
+.B carbureted
+attribute of the
+.B EDM
+element: when it is 1, the CDT channel is carburetor temperature and is
+exported as CRB.
 .SH VALIDATION
 JPI2Excel rejects malformed required metadata, inconsistent block counts,
 a missing or misplaced end marker, invalid flight boundaries, and bad

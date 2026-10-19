@@ -29,7 +29,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Revision: 5. Strict validation around the pinned MIT JPI-Parser.
+"""Revision: 6. Strict validation around the pinned MIT JPI-Parser.
 
 Binary delta unpacking and metric definitions remain upstream. This adapter
 checks boundaries/checksums, makes running totals dense, and normalizes metadata
@@ -373,8 +373,20 @@ def protocol2_flights(raw, jpi, directory, data_start, warnings):
     if (end != len(raw) or config_end < 0 or not raw.startswith(b'JPI', config_start)
             or dollar_record(raw, config_end) != ('E,4', version_start)):
         raise UnsupportedError('Unrecognized protocol-2 trailer or configuration block')
+    # The configuration is otherwise opaque; only <EDM carbureted="0|1"> is
+    # read. When set, upstream's CDT channel is carburetor temperature (CRB).
+    xml = bytes(b ^ 2 for b in raw[config_start + 3:config_end]).decode('utf-8', 'replace')
+    match = re.search(r'<EDM\b[^>]*\bcarbureted="([^"]*)"', xml)
+    carbureted = {'1': 'Yes', '0': 'No'}.get(match[1] if match else None, 'Not stated')
+    for flight in flights:
+        if 'CDT' in flight.series and carbureted == 'Yes':
+            flight.series = {('CRB' if c == 'CDT' else c): v for c, v in flight.series.items()}
+    if carbureted == 'Not stated' and any('CDT' in f.series for f in flights):
+        warnings.append('Configuration block does not state carbureted="0" or "1"; '
+                        'channel left as CDT')
     return flights, {'$D allocated length (bytes)': sum(size for _, size in directory),
                      'Logical binary length (bytes)': ptr - data_start,
                      'Logical binary end offset (bytes)': ptr,
                      'Configuration block length (bytes)': config_end - config_start,
-                     'Instrument version ($V)': version[2:]}
+                     'Instrument version ($V)': version[2:],
+                     'Carbureted (configuration)': carbureted}

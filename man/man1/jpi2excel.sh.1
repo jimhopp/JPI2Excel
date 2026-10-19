@@ -1,6 +1,6 @@
 .\" Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 .\" All rights reserved.
-.\" Revision: 10
+.\" Revision: 11
 .TH JPI2EXCEL.SH 1 "September 30, 2026" "JPI2Excel 2.0.0" "User Commands"
 .SH NAME
 jpi2excel.sh \- validate JP Instruments downloads and export CSV or Excel
@@ -46,6 +46,10 @@ Current decoding supports single-engine layouts with fuel-unit code 0
 no protocol record, and EDM-730 files with protocol record
 .BR "$P,2" .
 A zero-length flight-directory entry is skipped with a warning.
+When an EDM-730 configuration states
+.BR carbureted=\(dq1\(dq ,
+the channel JPI-Parser calls CDT is carburetor temperature
+and is exported as CRB.
 Other models, multi-engine layouts, and unvalidated formats fail explicitly.
 The recorded model code is preserved, including code 700 in EDM-800 downloads.
 .SH ACTIONS
@@ -55,7 +59,7 @@ Print labeled file and flight properties, one per line, in the form
 .IR "Label: value" .
 Include identifiers, download time, units, alarms, raw header fields,
 flight counts, and per-flight configuration such as recording interval,
-rated horsepower, monitored-cylinder count, IAT/CDT presence, and TIT count.
+rated horsepower, monitored-cylinder count, IAT/CDT/CRB presence, and TIT count.
 Also report logical and physical binary boundaries and final-block slack.
 TIT channel count is not assumed to equal physical turbocharger count.
 .B \-\-flights
@@ -193,8 +197,8 @@ CSV and flight worksheets have this column order, omitting absent sensors:
 .PP
 .nf
 Sample, Delta T, DateTime, MAP, RPM, EGTs, TITs, CHTs,
-FF, % HP, OAT, CDT, IAT, Oil P, Oil T, Batt, Used,
-Mark, Diff, Cold, Limits, Lat, Lon, Alt, Speed
+FF, FF2, % HP, OAT, CDT, CRB, IAT, Oil P, Oil T, Batt, Used, USD2,
+Mark, Diff, Cold, other channels, Limits, Lat, Lon, Alt, Speed
 .fi
 .PP
 Sample numbering begins at 1.
@@ -237,7 +241,8 @@ Source units and configuration appear in info/Summary output.
 .PP
 Flight-column widths follow their data: Sample 50 pixels, Delta T 44,
 DateTime 115, and Limits 125.
-CHTs, FF, % HP, OAT, CDT, IAT, Oil P, Oil T, Batt, Used, Mark, Diff, and Cold
+CHTs, FF, % HP, OAT, CDT, CRB, IAT, Oil P, Oil T, Batt, Used, Mark, Diff,
+and Cold
 use 53 pixels. MAP, RPM, EGTs, TITs, and navigation values use 55 pixels.
 These widths follow the columns when channels are omitted or added.
 Excel character-width settings are calibrated to the supplied macOS

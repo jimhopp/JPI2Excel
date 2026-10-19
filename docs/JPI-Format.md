@@ -3,8 +3,8 @@
 Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 All rights reserved.
 
-**Revision:** 8
-**Revision date:** 2026-10-12
+**Revision:** 9
+**Revision date:** 2026-10-19
 **Project:** JPI2Excel
 
 ## Revision history
@@ -18,6 +18,7 @@ All rights reserved.
 | 6 | 2026-10-09 | Added section 14.1: flight start time uses DOS-style packing with seconds in bits 0-4 doubled, verified against EZTrends; upstream JPI-Parser's `time_word & 62` is wrong. |
 | 7 | 2026-10-12 | Added section 25: protocol-2 EDM-730 header, flight packing, trailer, channel, GPS, and timestamp findings, checked against EZTrends exports. |
 | 8 | 2026-10-12 | Added section 25.10: JPI2Excel protocol-2 decoding rules, the DIF rule for unused EGT inputs, and the anonymized fixture. |
+| 9 | 2026-10-19 | The configuration XML's `carbureted` attribute identifies the CDT channel as carburetor temperature; JPI2Excel exports it as CRB. |
 
 ## Status and evidence
 
@@ -807,7 +808,7 @@ $V,Created by EDM730 VER 1.40 BLD 2014 BETA 4*68\r\n
 
 The first `$E` immediately follows the last flight's final record. It is **not** at `data_start + $L*256` as in the legacy family.
 
-The configuration block begins with the literal bytes `JPI`; the remaining bytes XOR `0x02` give a UTF-8 byte-order mark and an `<edm_cfg>` XML document. It holds instrument settings **including the tail number**, so it must never be copied into fixtures or exported output. JPI2Excel should treat it as opaque.
+The configuration block begins with the literal bytes `JPI`; the remaining bytes XOR `0x02` give a UTF-8 byte-order mark and an `<edm_cfg>` XML document. It holds instrument settings **including the tail number**, so it must never be copied into fixtures or exported output. JPI2Excel treats it as opaque apart from one attribute (25.6).
 
 ### 25.5 Flight header and records
 
@@ -821,7 +822,7 @@ Anonymized fixtures must replace the tail number, omit the configuration block, 
 
 With running totals carried forward across unchanged samples (as the legacy reader already does), every engine and fuel channel equals the EZTrends export at every sample: E1–E4, E6, C1–C6, CLD, carb temperature, FF, FF2, BAT, USD, HRS, and DIF (maximum minus minimum EGT). E5, MAP, and USD2 are blank in both.
 
-Channel naming: upstream's `CDT` is carburetor temperature on this installation; EZTrends labels it `CRB`.
+Channel naming: upstream's `CDT` is carburetor temperature on this installation; EZTrends labels it `CRB`, and so does the instrument's own gauge configuration. The binary records do not distinguish the two sensors, but the configuration XML does: its `<EDM>` element carries `carbureted="1"`, matching the instrument's `CARB? Y` setting.
 
 FF2 and USD2 are enabled in the configuration, but the owner confirmed that no second fuel-flow sensor is installed. FF2 reads 0.0 throughout in both JPI2Excel and EZTrends. That value reflects an unconnected channel, not a measured zero flow.
 
@@ -857,10 +858,11 @@ JPI2Excel accepts protocol-2 files only for model code 730 with `$P,2`, a nine-f
 3. requires upstream to select the 29-byte header and validates the header and every record with the additive checksum;
 4. requires `$E,4` directly after the last flight, a configuration block beginning with `JPI`, a second `$E,4`, and a final `$V` record ending the file;
 5. initializes `LAT`/`LNG` running totals from the header's starting position and exports them as `raw / 6000` degrees once a nonzero delta has occurred;
-6. exports every enabled channel as recorded, including FF2 and USD2.
+6. exports every enabled channel as recorded, including FF2 and USD2;
+7. reads only the `carbureted` attribute of the configuration's `<EDM>` element. When it is `1`, the CDT channel is exported as `CRB`. When it is `0`, the channel stays `CDT`. When it is absent or has any other value, the channel stays `CDT` with a warning. The value appears in the metadata as `Carbureted (configuration)`.
 
 DIF is the spread of the EGT channels that carry a value somewhere in the flight. The EDM-730 enables E5 but never records it; EZTrends computes DIF from the other EGTs, and so does JPI2Excel. This rule applies to legacy files too; it does not change any legacy fixture output.
 
 The Revision 6 start-time rule (section 14.1) applies unchanged.
 
-`testdata/EDM730-anon.JPI` was built with `pgms/make_edm730_fixture.py` from flights 735, 745, 747 (zero-length) and 749. It replaces the tail number with `TEST730`, replaces the configuration block with a stub, moves each starting position to N45 W100, and sets every nonzero LAT/LNG delta byte to 1, recomputing record checksums. Engine, fuel, SPD and ALT bytes are unchanged, and the regression tests check them against EZTrends values. When the private source downloads are present in `testdata-730/`, the tests also compare every sample of flights 735 and 749, including position, with the EZTrends exports.
+`testdata/EDM730-anon.JPI` was built with `pgms/make_edm730_fixture.py` from flights 735, 745, 747 (zero-length) and 749. It replaces the tail number with `TEST730`, replaces the configuration block with a stub that keeps only the `carbureted` attribute, moves each starting position to N45 W100, and sets every nonzero LAT/LNG delta byte to 1, recomputing record checksums. Engine, fuel, SPD and ALT bytes are unchanged, and the regression tests check them against EZTrends values. When the private source downloads are present in `testdata-730/`, the tests also compare every sample of flights 735 and 749, including position, with the EZTrends exports.
