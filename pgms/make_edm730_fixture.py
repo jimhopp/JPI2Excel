@@ -2,15 +2,13 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 2. Build an anonymized protocol-2 (EDM-730) regression fixture.
+"""Revision: 3. Build an anonymized protocol-2 (EDM-730) regression fixture.
 
-Copies selected flights from private EDM-730 downloads into one new file and
-removes aircraft-identifying content: the tail number becomes TEST730, the XML
-configuration block (which holds the tail number) becomes a stub keeping only
-the first source's carbureted attribute, each flight's
-starting latitude/longitude moves to N45 W100, and every nonzero LAT/LNG delta
-byte becomes 1 (signs kept). Engine, fuel, SPD and ALT bytes are unchanged.
-Record checksums are recomputed after the GPS bytes change.
+Copies selected flights unchanged from private EDM-730 downloads into one new
+file and removes the tail number: $U becomes TEST730, and the XML configuration
+block (which also holds the tail number) becomes a stub keeping only the first
+source's carbureted attribute. Flight bytes, including position, are copied
+verbatim.
 
 Each SOURCE is FILE.JPI:FLIGHT. A Z suffix (e.g. U260726.JPI:747Z) adds a
 zero-length $D entry with that flight number instead of copying the flight.
@@ -21,9 +19,7 @@ from operator import xor
 from pathlib import Path
 import re
 
-FAKE_LAT, FAKE_LNG = 45 * 6000, -100 * 6000
 HEADER_LENGTH = 29
-GPS_BYTES = {(10, 1), (10, 2), (10, 6), (10, 7)}   # LAT/LNG lo and hi delta bytes
 
 
 def dollar(body):
@@ -44,7 +40,7 @@ def records(raw):
 
 
 def walk_record(block, ptr):
-    """Return (end, offsets of GPS delta bytes) for the 16-bit-mask record at ptr."""
+    """Return the end offset of the 16-bit-mask record at ptr."""
     word1 = int.from_bytes(block[ptr:ptr + 2], 'big')
     if word1 != int.from_bytes(block[ptr + 2:ptr + 4], 'big'):
         raise ValueError(f'mask mismatch at flight byte {ptr}')
@@ -55,16 +51,10 @@ def walk_record(block, ptr):
         ctl[i] = block[ptr]
         ptr += 1
     ptr += sum(1 for i in present if i < 6 or i > 7)   # sign bytes
-    gps = []
-    for i in present:
-        for bit in range(8):
-            if ctl[i] & (1 << bit):
-                if (i, bit) in GPS_BYTES:
-                    gps.append(ptr)
-                ptr += 1
+    ptr += sum(bin(ctl[i]).count('1') for i in present)   # data bytes
     if ptr >= len(block):
         raise ValueError('record runs past allocation')
-    return ptr + 1, gps                           # checksum byte
+    return ptr + 1                                # checksum byte
 
 
 def extract_flight(path, fid):
@@ -80,30 +70,11 @@ def extract_flight(path, fid):
         block = raw[ptr:ptr + allocation]
         offset = HEADER_LENGTH
         while len(block) - offset > 1:
-            offset, _ = walk_record(block, offset)
+            offset = walk_record(block, offset)
         if number == fid:
-            return bytearray(block[:offset])
+            return block[:offset]
         ptr += offset
     raise SystemExit(f'{path}: flight {fid} not found')
-
-
-def anonymize(flight):
-    if len(flight) < HEADER_LENGTH or sum(flight[:HEADER_LENGTH]) % 256:
-        raise SystemExit('unexpected flight header')
-    flight[12:16] = FAKE_LAT.to_bytes(4, 'big', signed=True)
-    flight[16:20] = FAKE_LNG.to_bytes(4, 'big', signed=True)
-    flight[HEADER_LENGTH - 1] = 0
-    flight[HEADER_LENGTH - 1] = -sum(flight[:HEADER_LENGTH]) % 256
-    ptr = HEADER_LENGTH
-    while ptr < len(flight):
-        end, gps = walk_record(flight, ptr)
-        for offset in gps:
-            if flight[offset]:
-                flight[offset] = 1
-        flight[end - 1] = 0
-        flight[end - 1] = -sum(flight[ptr:end]) % 256
-        ptr = end
-    return bytes(flight)
 
 
 def main():
@@ -128,7 +99,7 @@ def main():
         if not match:
             raise SystemExit(f'bad SOURCE {source}')
         fid = int(match[1])
-        block = b'' if match[2] else anonymize(extract_flight(path, fid))
+        block = b'' if match[2] else extract_flight(path, fid)
         entries.append(f'D, {fid}, {(len(block) + 1) // 2}')
         blocks.append(block)
     halfsizes = sum((len(b) + 1) // 2 for b in blocks)

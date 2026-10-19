@@ -3,7 +3,7 @@
 Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 All rights reserved.
 
-**Revision:** 9
+**Revision:** 10
 **Revision date:** 2026-10-19
 **Project:** JPI2Excel
 
@@ -19,6 +19,7 @@ All rights reserved.
 | 7 | 2026-10-12 | Added section 25: protocol-2 EDM-730 header, flight packing, trailer, channel, GPS, and timestamp findings, checked against EZTrends exports. |
 | 8 | 2026-10-12 | Added section 25.10: JPI2Excel protocol-2 decoding rules, the DIF rule for unused EGT inputs, and the anonymized fixture. |
 | 9 | 2026-10-19 | The configuration XML's `carbureted` attribute identifies the CDT channel as carburetor temperature; JPI2Excel exports it as CRB. |
+| 10 | 2026-10-19 | Fixtures need only remove the tail number; the EDM-730 fixture now keeps real flight bytes, including position. |
 
 ## Status and evidence
 
@@ -761,7 +762,7 @@ The file itself provides enough information to distinguish the logical flight da
 
 Seven downloads from one EDM-730 (firmware 1.40, build 2014, beta 4), containing 37 non-empty flights, plus JPI EZTrends CSV exports of two of those flights (one of 1,791 samples, one of 3 samples).
 
-These files identify the aircraft and are not committed. Regression fixtures derived from them must be anonymized (see 25.5).
+These files identify the aircraft by tail number and are not committed. Regression fixtures derived from them must remove the tail number (see 25.5); per the owner, no other anonymization is needed.
 
 ### 25.2 ASCII header
 
@@ -816,7 +817,7 @@ The flight header is 29 bytes: flight ID, five configuration words, a 32-bit sig
 
 Records use 16-bit masks and upstream's `HEADERS_107` channel table. All flight headers and all records validate with the additive (`sum % 256`) checksum, which upstream selects for protocol 2.
 
-Anonymized fixtures must replace the tail number, omit the configuration block, and replace the starting latitude/longitude and GPS position deltas.
+Fixtures must replace the tail number in `$U` and must not copy the configuration block, which also contains it. Flight bytes, including position, may be copied unchanged.
 
 ### 25.6 Comparison with EZTrends
 
@@ -865,4 +866,4 @@ DIF is the spread of the EGT channels that carry a value somewhere in the flight
 
 The Revision 6 start-time rule (section 14.1) applies unchanged.
 
-`testdata/EDM730-anon.JPI` was built with `pgms/make_edm730_fixture.py` from flights 735, 745, 747 (zero-length) and 749. It replaces the tail number with `TEST730`, replaces the configuration block with a stub that keeps only the `carbureted` attribute, moves each starting position to N45 W100, and sets every nonzero LAT/LNG delta byte to 1, recomputing record checksums. Engine, fuel, SPD and ALT bytes are unchanged, and the regression tests check them against EZTrends values. When the private source downloads are present in `testdata-730/`, the tests also compare every sample of flights 735 and 749, including position, with the EZTrends exports.
+`testdata/EDM730-anon.JPI` was built with `pgms/make_edm730_fixture.py` from flights 735, 745, 747 (zero-length) and 749. It replaces the tail number with `TEST730` and replaces the configuration block with a stub that keeps only the `carbureted` attribute; flight bytes are copied unchanged. The regression tests check engine, fuel, GPS and timestamp values against EZTrends. When the private source downloads are present in `testdata-730/`, the tests also compare every sample of flights 735 and 749 with the EZTrends exports.

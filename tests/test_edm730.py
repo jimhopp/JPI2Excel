@@ -1,12 +1,12 @@
 # Copyright © 2025-2026 by Alan M. Marcum, Nescorna Professional.
 # All rights reserved.
 
-"""Revision: 2. Protocol-2 (EDM-730) framing, decoding, and EZTrends agreement.
+"""Revision: 3. Protocol-2 (EDM-730) framing, decoding, and EZTrends agreement.
 
 EDM730-anon.JPI was built by pgms/make_edm730_fixture.py from flights 735,
-745, 747 (zero-length $D entry) and 749 of private EDM-730 downloads. Expected
-engine values are copied from JPI EZTrends CSV exports of flights 735 and 749.
-GPS position was anonymized, so LAT/LNG expectations come from the fixture.
+745, 747 (zero-length $D entry) and 749 of private EDM-730 downloads; only the
+tail number was removed. Expected values are copied from JPI EZTrends CSV
+exports of flights 735 and 749.
 """
 import csv
 from datetime import datetime
@@ -132,12 +132,16 @@ class Edm730FixtureTests(unittest.TestCase):
         # EZTrends shows NA when the last record has zero GPS deltas.
         self.assertIsNotNone(series['SPD'][-1])
         self.assertIsNotNone(series['ALT'][-1])
-        # Ten samples precede the first fix; the anonymized fix is 257 units
-        # (one high and one low delta byte) from the fixture's N45 W100 start.
+        # Ten samples precede the first fix. EZTrends shows degrees.minutes.
+        # hundredths: N39.04.05 W111.10.48 (an acquisition jump), then
+        # N37.28.76 W122.08.73 and N36.53.18 W121.24.25.
         self.assertEqual(series['LAT'][:10], [None] * 10)
-        self.assertAlmostEqual(series['LAT'][10], 270257 / 6000)
-        self.assertAlmostEqual(series['LNG'][10], -599743 / 6000)
         self.assertTrue(all(v is not None for v in series['LAT'][10:]))
+        for index, lat, lng in ((10, 234405, -667048), (497, 224876, -732873),
+                                (1790, 221318, -728425)):
+            with self.subTest(index=index):
+                self.assertAlmostEqual(series['LAT'][index], lat / 6000)
+                self.assertAlmostEqual(series['LNG'][index], lng / 6000)
 
     def test_second_fuel_and_hours_columns(self):
         flight = self.flights[749]
